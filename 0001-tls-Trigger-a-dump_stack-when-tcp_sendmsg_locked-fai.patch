@@ -1,0 +1,60 @@
+From 48fc348b4284e10d0071d66c75051bb9e484a15c Mon Sep 17 00:00:00 2001
+From: Sascha Hauer <s.hauer@pengutronix.de>
+Date: Thu, 12 Oct 2023 13:29:00 +0200
+Subject: [PATCH] tls: Trigger a dump_stack() when tcp_sendmsg_locked() fails
+
+Signed-off-by: Sascha Hauer <s.hauer@pengutronix.de>
+---
+ io_uring/io_uring.c | 1 +
+ net/core/stream.c   | 6 +++++-
+ net/tls/tls_main.c  | 4 ++++
+ 3 files changed, 10 insertions(+), 1 deletion(-)
+
+diff --git a/io_uring/io_uring.c b/io_uring/io_uring.c
+index 783ed0fff71b5..d624b2e69ae98 100644
+--- a/io_uring/io_uring.c
++++ b/io_uring/io_uring.c
+@@ -1374,6 +1374,7 @@ static void io_req_normal_work_add(struct io_kiocb *req)
+ 	if (ctx->flags & IORING_SETUP_TASKRUN_FLAG)
+ 		atomic_or(IORING_SQ_TASKRUN, &ctx->rings->sq_flags);
+ 
++	/* This interrupts sk_stream_wait_memory() (notify_method == TWA_SIGNAL) */
+ 	if (likely(!task_work_add(req->task, &tctx->task_work, ctx->notify_method)))
+ 		return;
+ 
+diff --git a/net/core/stream.c b/net/core/stream.c
+index f5c4e47df1650..8e1c9ab1a93e3 100644
+--- a/net/core/stream.c
++++ b/net/core/stream.c
+@@ -134,8 +134,12 @@ int sk_stream_wait_memory(struct sock *sk, long *timeo_p)
+ 			goto do_error;
+ 		if (!*timeo_p)
+ 			goto do_eagain;
+-		if (signal_pending(current))
++		if (signal_pending(current)) {
++			printk("%s: Signal pending: %d %d\n", __func__,
++			       test_tsk_thread_flag(current, TIF_NOTIFY_SIGNAL), task_sigpending(current));
++			//panic("Boom!");
+ 			goto do_interrupted;
++		}
+ 		sk_clear_bit(SOCKWQ_ASYNC_NOSPACE, sk);
+ 		if (sk_stream_memory_free(sk) && !vm_wait)
+ 			break;
+diff --git a/net/tls/tls_main.c b/net/tls/tls_main.c
+index 02f583ff92395..3f111bfe44abf 100644
+--- a/net/tls/tls_main.c
++++ b/net/tls/tls_main.c
+@@ -190,6 +190,10 @@ int tls_push_sg(struct sock *sk,
+ 		iov_iter_bvec(&msg.msg_iter, ITER_SOURCE, &bvec, 1, size);
+ 
+ 		ret = tcp_sendmsg_locked(sk, &msg, size);
++		if (ret < 0) {
++			printk("%s: tcp_sendmsg_locked returned %d\n", __func__, ret);
++			dump_stack();
++		}
+ 
+ 		if (ret != size) {
+ 			if (ret > 0) {
+-- 
+2.39.2
+
