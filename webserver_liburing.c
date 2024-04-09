@@ -618,6 +618,7 @@ static int add_cryptd_gcm_aes(void)
 int main(int argc, char *argv[])
 {
 	int opt;
+	int ret;
 
 	while ((opt = getopt(argc, argv, "c")) != -1) {
 		switch (opt) {
@@ -632,7 +633,12 @@ int main(int argc, char *argv[])
 	printf("ZeroHTTPd listening on port: %d\n", DEFAULT_SERVER_PORT);
 
 	signal(SIGINT, sigint_handler);
-	io_uring_queue_init(QUEUE_DEPTH, &ring, 0);
+
+	ret = io_uring_queue_init(QUEUE_DEPTH, &ring, 0);
+	if (ret) {
+		perror("io_uring_queue_init");
+		exit(1);
+	}
 
 	server_loop(server_socket);
 
