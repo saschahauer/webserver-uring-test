@@ -495,7 +495,12 @@ static void complete_splice_request(struct io_uring_cqe *cqe)
 	struct request *req = (struct request *)(unsigned long)cqe->user_data;
 	size_t len;
 
-	if (cqe->res < 0 && cqe->res != -EAGAIN) {
+	if (cqe->res == -EAGAIN) {
+		len = req->len;
+		goto again;
+	}
+
+	if (cqe->res < 0) {
 		printf("Splice failed with %d\n", cqe->res);
 		goto closefds;
 	}
@@ -510,7 +515,7 @@ static void complete_splice_request(struct io_uring_cqe *cqe)
 		goto closefds;
 
 	//printf("Splice %d->%d remaining: %ld\n", req->fromfd, req->tofd, len);
-
+again:
 	if (len) {
 		add_splice_request(req->fromfd, req->tofd, len);
 	}
