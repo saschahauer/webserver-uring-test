@@ -253,7 +253,7 @@ static void add_splice_request(int fromfd, int tofd, size_t len)
 	struct io_uring_sqe *sqe = io_uring_get_sqe(&ring);
 	struct request *req;
 
-//	printf("Splice %d->%d len: %d\n", fromfd, tofd, len);
+//	printf("Splice %d->%d len: %ld\n", fromfd, tofd, len);
 
 	req = xzalloc(sizeof(*req));
 	req->fromfd = fromfd;
@@ -509,7 +509,7 @@ static void complete_splice_request(struct io_uring_cqe *cqe)
 	if (!len)
 		goto closefds;
 
-	//printf("Splice %d->%d remaining: %d\n", req->fromfd, req->tofd, len);
+	//printf("Splice %d->%d remaining: %ld\n", req->fromfd, req->tofd, len);
 
 	if (len) {
 		add_splice_request(req->fromfd, req->tofd, len);
